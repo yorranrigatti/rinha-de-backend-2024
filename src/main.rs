@@ -1,6 +1,6 @@
 use deadpool_postgres::{Config, PoolConfig, Runtime, Timeouts};
 use deadpool_redis::{ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
-use std::{env, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 use tokio_postgres::NoTls;
 
 mod db;
@@ -49,5 +49,14 @@ async fn main() -> AsyncVoidResult {
     println!("redis pool successfully created");
 
     tokio::spawn(async move {db_warmup().await});
+
+    let pool_async = pool.clone();
+    tokio::spawn(async move { db_clean_warmup(pool_async).await });
+
+    let pool_async = pool.clone();
+    let queue = Arc::new(AppQueue::new());
+    let queue_async = queue.clone();
+    tokio::spawn(async move { db_flush_queue(pool_async, queue_async).await });
+    
     Ok(())
 }

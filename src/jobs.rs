@@ -1,4 +1,7 @@
-use std::time::Duration;
+use crate::db::*;
+use deadpool_postgres::Pool;
+use std::{sync::Arc, time::Duration};
+
 
 pub async fn db_warmup() {
   println!("warming up...");
@@ -32,4 +35,22 @@ pub async fn db_warmup() {
 
   futures::future::join_all(f).await;
   println!("warmup finished");
+}
+
+pub async fn db_clean_warmup(pool: Pool) {
+  println!("cleaning warmup data...");
+  tokio::time::sleep(Duration::from_secs(3)).await;
+  pool.get().await.unwrap().execute("DELETE FROM clientes", &[]).await.unwrap();
+}
+
+pub async fn db_flush_queue(pool_async: Pool, queue_async: Arc<AppQueue>) {
+ println!("queue flush job started (loop every 2 seconds)");
+ loop {
+  tokio::time::sleep(Duration::from_secs(2)).await;
+  let queue = queue_async.clone();
+  if queue.len() == 0 {
+    continue;
+  }
+  batch_insert(pool_async.clone(), queue).await;
+ } 
 }
